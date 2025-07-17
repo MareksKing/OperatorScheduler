@@ -1,0 +1,24 @@
+{
+  "include": ["."],
+
+  "exclude": [
+    "**/node_modules",
+    "**/__pycache__",
+  ],
+
+  "ignore": [
+    "**/node_modules",
+    "**/__pycache__",
+  ],
+
+  "stubPath": "./typings",
+  "pythonPlatform": "Windows",
+  "pythonVersion": "3.11",
+
+  "reportMissingImports": true,
+  "reportMissingTypeStubs": false,
+
+  "venvPath": "C:\\Users\\Mareks\\AppData\\Local\\pypoetry\\Cache\\virtualenvs",
+  "venv": "operatorscheduling-XLdNvxh6-py3.11"
+
+}
