@@ -1,0 +1,24 @@
+[project]
+name = "operatorscheduling"
+version = "0.1.0"
+description = "Takes operator schedule from Telia and creates meeting reminders for operators when their shift is due"
+authors = [
+    {name = "Mareks",email = "robaldsmareks@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "pandas (>=2.3.1,<3.0.0)",
+    "pywin32 (>=311,<312)"
+]
+
+[tool.poetry]
+packages = [{include = "operatorscheduling", from = "src"}]
+
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.4.1"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
