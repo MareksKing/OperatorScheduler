@@ -3,13 +3,25 @@ import pandas as pd
 import win32com.client
 from datetime import datetime, timedelta
 
+from dotenv import dotenv_values
 from win32com.client.dynamic import CDispatch
 
+config = dotenv_values(".env")
 class Operator:
 
-    def __init__(self, email: str, operator_dates: list[str]):
-        self.email: str = email
+    def __init__(self, name: str, operator_dates: list[str]):
+        self.email: str = self.create_email_from_name(name)
         self.operator_dates: list[datetime] = self.__convert_to_datetimes(operator_dates)
+
+    def create_email_from_name(self, name:str) -> str:
+        EMAIL_DOMAIN = config.get('EMAIL_DOMAIN', None)
+        employee = config.get(f'EMP_{name}', None)
+        if EMAIL_DOMAIN is None:
+            raise ValueError("EMAIL_DOMAIN keyword not found in config")
+        if employee is None:
+            raise ValueError(f"Employee keyword: EMP_{name} not found in config")
+
+        return f"{employee}@{EMAIL_DOMAIN}"
 
     def __convert_to_datetimes(self, operator_dates: list[str]) -> list[datetime]:
         converted_list: list[datetime] = []
@@ -36,10 +48,10 @@ class MeetingManager:
         self.location: str = "At work/Home"
         self.subject: str = "Upcomming shift"
         self.body: str = ""
+
+    def create_appointment(self, operator: Operator):
         self.list_of_dates: list[datetime] = operator.operator_dates
         self.appointment.Recipients.Add(operator.email)
-
-    def create_appointment(self):
         for date in self.list_of_dates:
             self.start_time = date
             self.end_time = date + timedelta(minutes=30)
