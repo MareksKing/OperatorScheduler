@@ -10,6 +10,7 @@ config = dotenv_values(".env")
 class Operator:
 
     def __init__(self, name: str, operator_dates: list[str]):
+        self.name: str = name
         self.email: str = self.create_email_from_name(name)
         self.operator_dates: list[datetime] = self.__convert_to_datetimes(operator_dates)
 
@@ -78,7 +79,7 @@ for i, row in filtered_df.iterrows():
 
 def get_mareks():
     for agent in AGENTS:
-        if agent.email == "Mareks":
+        if agent.name == "Mareks":
              return agent
 
 mareks = get_mareks()
