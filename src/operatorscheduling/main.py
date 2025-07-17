@@ -41,7 +41,7 @@ class Operator:
 
 class MeetingManager:
 
-    def __init__(self, operator: Operator):
+    def __init__(self):
         self.outlook: CDispatch = win32com.client.Dispatch("Outlook.Application")
         self.namespace: CDispatch = self.outlook.GetNamespace("MAPI")
         self.appointment: CDispatch = self.outlook.CreateItem(1)
@@ -82,6 +82,6 @@ def get_mareks():
              return agent
 
 mareks = get_mareks()
-manager = MeetingManager(mareks)
-manager.create_appointment()
+manager = MeetingManager()
+manager.create_appointment(mareks)
 
