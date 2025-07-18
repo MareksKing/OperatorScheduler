@@ -18,7 +18,7 @@ class Operator:
         self.email: str = self.create_email_from_name(name)
         self.operator_dates: list[datetime] = self.__convert_to_datetimes(operator_dates)
 
-    def create_email_from_name(self, name:str) -> str:
+    def create_email_from_name(self, name: str) -> str:
         EMAIL_DOMAIN = config.get('EMAIL_DOMAIN', None)
         employee = config.get(f'EMP_{name}', None)
         if EMAIL_DOMAIN is None:
@@ -29,7 +29,7 @@ class Operator:
         return f"{employee}@{EMAIL_DOMAIN}"
 
     def __convert_to_datetimes(self, operator_dates: list[str]) -> list[datetime]:
-        #Telia date format: 08.08.2025 15:00-22:00 -> dd.mm.YYYY HH:MM-HH:MM
+        # Telia date format: 08.08.2025 15:00-22:00 -> dd.mm.YYYY HH:MM-HH:MM
 
         converted_list: list[datetime] = []
         FORMAT = config.get("FORMAT", None)
@@ -55,6 +55,7 @@ class Operator:
     def __repr__(self):
         return f"{self.email} - {self.operator_dates}"
 
+
 class MeetingManager:
 
     def __init__(self):
@@ -78,22 +79,23 @@ class MeetingManager:
             self.appointment.Send()
 
 
-df = pd.read_csv(filepath_or_buffer="./agents_schedulers.csv", sep=";")
-date_columns = df.columns[1:]
-df['covered_dates'] = df[date_columns].apply(lambda row: row.dropna().index.tolist(), axis=1)
-filtered_df = df[['Agents/Date', 'covered_dates']]
-filtered_df = filtered_df.rename(columns={"Agents/Date": "agent"})
+def main():
 
-AGENTS: list[Operator] = []
-for i, row in filtered_df.iterrows():
-    AGENTS.append(Operator(row.agent, row.covered_dates))
+    df = pd.read_csv(filepath_or_buffer="./agents_schedulers.csv", sep=";")
+    date_columns = df.columns[1:]
+    df['covered_dates'] = df[date_columns].apply(lambda row: row.dropna().index.tolist(), axis=1)
+    filtered_df = df[['Agents/Date', 'covered_dates']]
+    filtered_df = filtered_df.rename(columns={"Agents/Date": "agent"})
 
-def get_mareks():
+    AGENTS: list[Operator] = []
+    for i, row in filtered_df.iterrows():
+        AGENTS.append(Operator(row.agent, row.covered_dates))
+
+    manager = MeetingManager()
     for agent in AGENTS:
-        if agent.name == "Mareks":
-             return agent
+        manager.create_appointment(agent)
 
-mareks = get_mareks()
-manager = MeetingManager()
-manager.create_appointment(mareks)
+if __name__ == "__main__":
+    main()
+
 

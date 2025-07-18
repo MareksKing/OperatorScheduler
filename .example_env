@@ -1,0 +1,15 @@
+
+# Timezone of your location
+TIMEZONE = "Europe/Berlin"
+
+# Format of the date, ex: 30.07.2025 15:00
+FORMAT = "%d.%m.%Y %H:%M"
+
+# Email domain used in your company without the '@'
+EMAIL_DOMAIN = "email-domain.com"
+
+# Email prefix, usually name.surname etc
+EMP_Name1 = "name1.surname1"
+EMP_Name2 = "name2.surname2"
+
+
