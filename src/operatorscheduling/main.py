@@ -6,7 +6,11 @@ import pytz
 from dotenv import dotenv_values
 from win32com.client.dynamic import CDispatch
 
+
 config = dotenv_values(".env")
+if not config:
+    config = dotenv_values("env")
+
 class Operator:
 
     def __init__(self, name: str, operator_dates: list[str]):
@@ -25,14 +29,23 @@ class Operator:
         return f"{employee}@{EMAIL_DOMAIN}"
 
     def __convert_to_datetimes(self, operator_dates: list[str]) -> list[datetime]:
-        converted_list: list[datetime] = []
         #Telia date format: 08.08.2025 15:00-22:00 -> dd.mm.YYYY HH:MM-HH:MM
-        TIMEZONE = "Europe/Riga"
-        FORMAT = "%d.%m.%Y %H:%M"
+
+        converted_list: list[datetime] = []
+        FORMAT = config.get("FORMAT", None)
+        TIMEZONE = config.get("TIMEZONE", None)
         removed_time_range_date = [date.split("-")[0] for date in operator_dates]
+
+        if FORMAT is None:
+            raise ValueError("FORMAT keyword not found in config")
+        if TIMEZONE is None:
+            raise ValueError("TIMEZONE keyword not found in config")
+
+        timezone = pytz.timezone(TIMEZONE)
         for date in removed_time_range_date:
-            dtobj_tz = pytz.timezone(TIMEZONE).localize(datetime.strptime(date, FORMAT))
-            converted_list.append(dtobj_tz)
+            timedelta_offset = timezone.localize(datetime.strptime(date, FORMAT)).utcoffset()
+            new_date = date + timedelta_offset
+            converted_list.append(new_date)
 
         return converted_list
 
@@ -58,7 +71,7 @@ class MeetingManager:
             self.appointment.Subject = self.subject
             self.appointment.Location = self.location
             self.appointment.Body = self.body
-            self.appointment.Start = date + timedelta(hours=3)
+            self.appointment.Start = date
             self.appointment.End = date + timedelta(minutes=30)
             self.appointment.Recipients.Add(operator.email)
             self.appointment.Save()
