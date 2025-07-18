@@ -1,7 +1,7 @@
-from pprint import pprint
 import pandas as pd
 import win32com.client
 from datetime import datetime, timedelta
+import pytz
 
 from dotenv import dotenv_values
 from win32com.client.dynamic import CDispatch
@@ -27,10 +27,12 @@ class Operator:
     def __convert_to_datetimes(self, operator_dates: list[str]) -> list[datetime]:
         converted_list: list[datetime] = []
         #Telia date format: 08.08.2025 15:00-22:00 -> dd.mm.YYYY HH:MM-HH:MM
+        TIMEZONE = "Europe/Riga"
+        FORMAT = "%d.%m.%Y %H:%M"
         removed_time_range_date = [date.split("-")[0] for date in operator_dates]
         for date in removed_time_range_date:
-            converted_date:datetime = datetime.strptime(date, "%d.%m.%Y %H:%M")
-            converted_list.append(converted_date)
+            dtobj_tz = pytz.timezone(TIMEZONE).localize(datetime.strptime(date, FORMAT))
+            converted_list.append(dtobj_tz)
 
         return converted_list
 
@@ -44,30 +46,26 @@ class MeetingManager:
 
     def __init__(self):
         self.outlook: CDispatch = win32com.client.Dispatch("Outlook.Application")
-        self.namespace: CDispatch = self.outlook.GetNamespace("MAPI")
-        self.appointment: CDispatch = self.outlook.CreateItem(1)
         self.location: str = "At work/Home"
         self.subject: str = "Upcomming shift"
         self.body: str = ""
+        self.list_of_dates: list[datetime] = []
 
     def create_appointment(self, operator: Operator):
-        self.list_of_dates: list[datetime] = operator.operator_dates
-        self.appointment.Recipients.Add(operator.email)
+        self.list_of_dates = operator.operator_dates
         for date in self.list_of_dates:
-            self.start_time = date
-            self.end_time = date + timedelta(minutes=30)
-            self.send_appointment()
+            self.appointment: CDispatch = self.outlook.CreateItem(1)
+            self.appointment.Subject = self.subject
+            self.appointment.Location = self.location
+            self.appointment.Body = self.body
+            self.appointment.Start = date + timedelta(hours=3)
+            self.appointment.End = date + timedelta(minutes=30)
+            self.appointment.Recipients.Add(operator.email)
+            self.appointment.Save()
+            self.appointment.Send()
 
-    def send_appointment(self):
-        self.appointment.Subject = self.subject
-        self.appointment.Location = self.location
-        self.appointment.Body = self.body
-        self.appointment.Start = self.start_time
-        self.appointment.End = self.end_time
-        self.appointment.Save()
-        self.appointment.Send()
 
-df = pd.read_csv("./agents_schedulers.csv", sep=";")
+df = pd.read_csv(filepath_or_buffer="./agents_schedulers.csv", sep=";")
 date_columns = df.columns[1:]
 df['covered_dates'] = df[date_columns].apply(lambda row: row.dropna().index.tolist(), axis=1)
 filtered_df = df[['Agents/Date', 'covered_dates']]

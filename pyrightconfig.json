@@ -18,7 +18,4 @@
   "reportMissingImports": true,
   "reportMissingTypeStubs": false,
 
-  "venvPath": "C:\\Users\\Mareks\\AppData\\Local\\pypoetry\\Cache\\virtualenvs",
-  "venv": "operatorscheduling-XLdNvxh6-py3.11"
-
 }
