@@ -11,6 +11,7 @@ config = dotenv_values(".env")
 if not config:
     config = dotenv_values("env")
 
+
 class Operator:
 
     def __init__(self, name: str, operator_dates: list[str]):
@@ -43,17 +44,25 @@ class Operator:
 
         timezone = pytz.timezone(TIMEZONE)
         for date in removed_time_range_date:
-            timedelta_offset = timezone.localize(datetime.strptime(date, FORMAT)).utcoffset()
+            date = datetime.strptime(date, FORMAT)
+            timedelta_offset = timezone.localize(date).utcoffset()
             new_date = date + timedelta_offset
             converted_list.append(new_date)
 
         return converted_list
 
     def __str__(self):
-        return f"{self.email} - {self.operator_dates}"
+        return f"{self.name} - {self.email}"
 
     def __repr__(self):
-        return f"{self.email} - {self.operator_dates}"
+        return f"{self.name} - {self.email}"
+
+
+def get_next_operator(operator_timeline: list, index: int):
+    try:
+        return operator_timeline[index]
+    except IndexError:
+        return None
 
 
 class MeetingManager:
@@ -65,18 +74,24 @@ class MeetingManager:
         self.body: str = ""
         self.list_of_dates: list[datetime] = []
 
-    def create_appointment(self, operator: Operator):
-        self.list_of_dates = operator.operator_dates
-        for date in self.list_of_dates:
-            self.appointment: CDispatch = self.outlook.CreateItem(1)
-            self.appointment.Subject = self.subject
-            self.appointment.Location = self.location
-            self.appointment.Body = self.body
-            self.appointment.Start = date
-            self.appointment.End = date + timedelta(minutes=30)
-            self.appointment.Recipients.Add(operator.email)
-            self.appointment.Save()
-            self.appointment.Send()
+    def create_appointment(self, operator: tuple[str, str, datetime], next_operator: str | None):
+        name, email, date = operator
+        if next_operator is None:
+            n_operator = "TBD"
+        else:
+            n_operator = next_operator
+        self.appointment: CDispatch = self.outlook.CreateItem(1)
+        self.appointment.Subject = self.subject
+        self.appointment.Location = self.location
+        self.appointment.Body = self.body + f"Next operator -> {n_operator}"
+        self.appointment.Start = date
+        self.appointment.End = date + timedelta(hours=8)
+        self.appointment.Recipients.Add(email)
+        self.appointment.Categories = "Yellow Category"
+        self.appointment.BusyStatus = 0
+        self.appointment.ReminderMinutesBeforeStart = 24 * 60
+        self.appointment.Save()
+        self.appointment.Send()
 
 
 def main():
@@ -91,9 +106,19 @@ def main():
     for i, row in filtered_df.iterrows():
         AGENTS.append(Operator(row.agent, row.covered_dates))
 
-    manager = MeetingManager()
+    operator_timeline: list[tuple[str, str, datetime]] = []
     for agent in AGENTS:
-        manager.create_appointment(agent)
+        agent_timeline = [(agent.name, agent.email, date) for date in agent.operator_dates]
+        operator_timeline.extend(agent_timeline)
+
+    operator_timeline = sorted(operator_timeline, key=lambda x: x[1])
+
+    manager = MeetingManager()
+    for i in range(len(operator_timeline)):
+        agent = operator_timeline[i]
+        next_operator = get_next_operator(operator_timeline, index=i)
+        manager.create_appointment(agent, next_operator)
+
 
 if __name__ == "__main__":
     main()
