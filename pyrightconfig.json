@@ -17,5 +17,6 @@
 
   "reportMissingImports": true,
   "reportMissingTypeStubs": false,
+  "typeCheckingMode": "basic"
 
 }

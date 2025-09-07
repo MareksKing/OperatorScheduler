@@ -58,7 +58,7 @@ class Operator:
         return f"{self.name} - {self.email}"
 
 
-def get_next_operator(operator_timeline: list, index: int):
+def get_next_operator(operator_timeline: list[tuple[str, str, datetime]], index: int):
     try:
         return operator_timeline[index]
     except IndexError:
@@ -74,16 +74,44 @@ class MeetingManager:
         self.body: str = ""
         self.list_of_dates: list[datetime] = []
 
-    def create_appointment(self, operator: tuple[str, str, datetime], next_operator: str | None):
+    def check_for_existing_shift(self, operator: tuple[str, str, datetime]):
         name, email, date = operator
-        if next_operator is None:
-            n_operator = "TBD"
+        namespace = self.outlook.GetNamespace("MAPI")
+        recipient = namespace.CreateRecipient(email)
+        recipient.Resolve()
+        if recipient.Resolved:
+            shared_calendar = namespace.GetSharedDefaultFolder(recipient, 9)
+            items = shared_calendar.Items
+            items.IncludeRecurrences = False
+            items.Sort("[Start]")
+
+            start = date
+            end = date + timedelta(days=1)
+            print(items)
+            restriction = f"[Start] >= {start.strftime('%m/%d/%Y %H:%M')} AND [Subject] == {self.subject} AND [End] <={end.strftime('%m/%d/%Y %H:%M')}"
+            matching_items = items.Restrict(restriction)
+            
+            for item in matching_items:
+                print(f"Deleting: {item.Subject} at {item.Start}")
         else:
-            n_operator = next_operator
+            print(f"Could not resolve {email}")
+
+
+
+    def create_appointment(self, operator: tuple[str, str, datetime], next_operator: tuple[str, str, datetime] | None, specific_date: datetime | None = None):
+        name, email, date = operator
+        self.check_for_existing_shift(operator)
+        if next_operator is None:
+            next_name, next_mail, next_date = "TBD", "TBD", "TBD"
+        else:
+            next_name, next_mail, next_date = next_operator
+        
+        if specific_date is not None:
+            date = specific_date
         self.appointment: CDispatch = self.outlook.CreateItem(1)
         self.appointment.Subject = self.subject
         self.appointment.Location = self.location
-        self.appointment.Body = self.body + f"Next operator -> {n_operator}"
+        self.appointment.Body = self.body + f"Next operator -> {next_name}"
         self.appointment.Start = date
         self.appointment.End = date + timedelta(hours=8)
         self.appointment.Recipients.Add(email)
@@ -92,7 +120,6 @@ class MeetingManager:
         self.appointment.ReminderMinutesBeforeStart = 24 * 60
         self.appointment.Save()
         self.appointment.Send()
-
 
 def main():
 
