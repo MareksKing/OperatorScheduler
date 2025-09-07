@@ -69,6 +69,7 @@ class MeetingManager:
 
     def __init__(self):
         self.outlook: CDispatch = win32com.client.Dispatch("Outlook.Application")
+        self.namespace = self.outlook.GetNamespace("MAPI")
         self.location: str = "At work/Home"
         self.subject: str = "Upcomming shift"
         self.body: str = ""
@@ -76,25 +77,23 @@ class MeetingManager:
 
     def check_for_existing_shift(self, operator: tuple[str, str, datetime]):
         name, email, date = operator
-        namespace = self.outlook.GetNamespace("MAPI")
-        recipient = namespace.CreateRecipient(email)
-        recipient.Resolve()
-        if recipient.Resolved:
-            shared_calendar = namespace.GetDefaultFolder(9)
-            items = shared_calendar.Items
-            items.IncludeRecurrences = True
+        default_calendar = self.namespace.GetDefaultFolder(9).Items
+        default_calendar.IncludeRecurrences = False
+        start_date = date
+        end_date = date+timedelta(days=1)
 
-            start = date
-            end = date + timedelta(days=50)
-            restriction = f"[Start] >= '{start.strftime('%m/%d/%Y %H:%M')}' AND [Subject] = {self.subject} AND [End] <= '{end.strftime('%m/%d/%Y %H:%M')}'"
-            matching_items = items.Restrict(restriction)
-            
-            for item in matching_items:
-                recipients = [rec.name for rec in item.Recipients]
-                print(f"Deleting: {item.Subject} at {item.Start} - attendee: {recipients}")
-        else:
-            print(f"Could not resolve {email}")
+        restriction = f"[Start] >= '{start_date.strftime('%m/%d/%Y %H:%M')}' AND [Subject] = {self.subject} AND [End] <= '{end_date.strftime('%m/%d/%Y %H:%M')}'"
+        matching_items = default_calendar.Restrict(restriction)
+        if matching_items.Recipients.name != name:
+            matching_items.CancelMeeting()
+            matching_items.Delete()
 
+        
+        for item in matching_items:
+            recipients = [rec.name for rec in item.Recipients]
+            print(f"Deleting: {item.Subject} at {item.Start} - attendee: {recipients}")
+
+        return matching_items
 
 
     def create_appointment(self, operator: tuple[str, str, datetime], next_operator: tuple[str, str, datetime] | None, specific_date: datetime | None = None):
@@ -114,17 +113,35 @@ class MeetingManager:
         self.appointment.Start = date
         self.appointment.End = date + timedelta(hours=8)
         self.appointment.Recipients.Add(email)
-        self.appointment.Categories = "Operator on Duty"
         self.appointment.BusyStatus = 0
         self.appointment.ReminderMinutesBeforeStart = 24 * 60
-        self.check_for_existing_shift(operator)
+        existing_meeting = self.check_for_existing_shift(operator)
 #        self.appointment.Save()
 #        self.appointment.Send()
 
-def get_operator(name: str, agents: list):
+def get_operator(name: str, agents: list) -> Operator | None:
     for agent in agents:
         if agent.name == name:
             return agent
+    return None
+
+def create_agent_list(df: pd.DataFrame) -> list[Operator]:
+
+    AGENTS: list[Operator] = []
+    for i, row in df.iterrows():
+        AGENTS.append(Operator(row.agent, row.covered_dates))
+        
+    return AGENTS
+
+def create_operator_timeline(agents: list[Operator]) -> list[tuple[str, str, datetime]]:
+
+    operator_timeline: list[tuple[str, str, datetime]] = []
+    for agent in agents:
+        agent_timeline = [(agent.name, agent.email, date) for date in agent.operator_dates]
+        operator_timeline.extend(agent_timeline)
+
+    operator_timeline = sorted(operator_timeline, key=lambda x: x[1])
+    return operator_timeline
 
 def main():
 
@@ -135,20 +152,15 @@ def main():
     filtered_df = df[['Agents/Date', 'covered_dates']]
     filtered_df = filtered_df.rename(columns={"Agents/Date": "agent"})
 
-    AGENTS: list[Operator] = []
-    for i, row in filtered_df.iterrows():
-        AGENTS.append(Operator(row.agent, row.covered_dates))
+    AGENTS = create_agent_list(filtered_df)
 
-    operator_timeline: list[tuple[str, str, datetime]] = []
-    for agent in AGENTS:
-        agent_timeline = [(agent.name, agent.email, date) for date in agent.operator_dates]
-        operator_timeline.extend(agent_timeline)
-
-    operator_timeline = sorted(operator_timeline, key=lambda x: x[1])
-
+    operator_timeline = create_operator_timeline(AGENTS)
     
     manager = MeetingManager()
     mareks = get_operator("Mareks", AGENTS)
+    if mareks is None:
+        print("No agent found")
+        return
     skaidrite = get_operator("Skaidrite", AGENTS)
 
     tuples = (mareks.name, mareks.email, datetime(2025, 7, 24, 10, 0))
