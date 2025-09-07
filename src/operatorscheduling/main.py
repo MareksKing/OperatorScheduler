@@ -80,19 +80,18 @@ class MeetingManager:
         recipient = namespace.CreateRecipient(email)
         recipient.Resolve()
         if recipient.Resolved:
-            shared_calendar = namespace.GetSharedDefaultFolder(recipient, 9)
+            shared_calendar = namespace.GetDefaultFolder(9)
             items = shared_calendar.Items
-            items.IncludeRecurrences = False
-            items.Sort("[Start]")
+            items.IncludeRecurrences = True
 
             start = date
-            end = date + timedelta(days=1)
-            print(items)
-            restriction = f"[Start] >= {start.strftime('%m/%d/%Y %H:%M')} AND [Subject] == {self.subject} AND [End] <={end.strftime('%m/%d/%Y %H:%M')}"
+            end = date + timedelta(days=50)
+            restriction = f"[Start] >= '{start.strftime('%m/%d/%Y %H:%M')}' AND [Subject] = {self.subject} AND [End] <= '{end.strftime('%m/%d/%Y %H:%M')}'"
             matching_items = items.Restrict(restriction)
             
             for item in matching_items:
-                print(f"Deleting: {item.Subject} at {item.Start}")
+                recipients = [rec.name for rec in item.Recipients]
+                print(f"Deleting: {item.Subject} at {item.Start} - attendee: {recipients}")
         else:
             print(f"Could not resolve {email}")
 
@@ -100,7 +99,6 @@ class MeetingManager:
 
     def create_appointment(self, operator: tuple[str, str, datetime], next_operator: tuple[str, str, datetime] | None, specific_date: datetime | None = None):
         name, email, date = operator
-        self.check_for_existing_shift(operator)
         if next_operator is None:
             next_name, next_mail, next_date = "TBD", "TBD", "TBD"
         else:
@@ -109,21 +107,29 @@ class MeetingManager:
         if specific_date is not None:
             date = specific_date
         self.appointment: CDispatch = self.outlook.CreateItem(1)
+        self.appointment.MeetingStatus = 1
         self.appointment.Subject = self.subject
         self.appointment.Location = self.location
         self.appointment.Body = self.body + f"Next operator -> {next_name}"
         self.appointment.Start = date
         self.appointment.End = date + timedelta(hours=8)
         self.appointment.Recipients.Add(email)
-        self.appointment.Categories = "Yellow Category"
+        self.appointment.Categories = "Operator on Duty"
         self.appointment.BusyStatus = 0
         self.appointment.ReminderMinutesBeforeStart = 24 * 60
-        self.appointment.Save()
-        self.appointment.Send()
+        self.check_for_existing_shift(operator)
+#        self.appointment.Save()
+#        self.appointment.Send()
+
+def get_operator(name: str, agents: list):
+    for agent in agents:
+        if agent.name == name:
+            return agent
 
 def main():
 
-    df = pd.read_csv(filepath_or_buffer="./agents_schedulers.csv", sep=";")
+    df = pd.read_csv(filepath_or_buffer="./agents_schedulers.csv", sep=",")
+    print(df)
     date_columns = df.columns[1:]
     df['covered_dates'] = df[date_columns].apply(lambda row: row.dropna().index.tolist(), axis=1)
     filtered_df = df[['Agents/Date', 'covered_dates']]
@@ -140,11 +146,17 @@ def main():
 
     operator_timeline = sorted(operator_timeline, key=lambda x: x[1])
 
+    
     manager = MeetingManager()
-    for i in range(len(operator_timeline)):
-        agent = operator_timeline[i]
-        next_operator = get_next_operator(operator_timeline, index=i)
-        manager.create_appointment(agent, next_operator)
+    mareks = get_operator("Mareks", AGENTS)
+    skaidrite = get_operator("Skaidrite", AGENTS)
+
+    tuples = (mareks.name, mareks.email, datetime(2025, 7, 24, 10, 0))
+    manager.create_appointment(tuples, tuples)
+   # for i in range(len(operator_timeline)):
+   #     agent = operator_timeline[i]
+   #     next_operator = get_next_operator(operator_timeline, index=i)
+   #     manager.create_appointment(agent, next_operator)
 
 
 if __name__ == "__main__":
