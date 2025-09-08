@@ -82,17 +82,16 @@ class MeetingManager:
         default_calendar.IncludeRecurrences = False
         start_date = date
         end_date = date+timedelta(days=1)
-
+        name = " ".join(config.get(f"EMP_{name}").split(".")).title()
+        print(start_date, end_date)
         restriction = f"[Start] >= '{start_date.strftime('%m/%d/%Y %H:%M')}' AND [Subject] = {self.subject} AND [End] <= '{end_date.strftime('%m/%d/%Y %H:%M')}'"
         matching_items = default_calendar.Restrict(restriction)
-        if matching_items.Recipients.name != name:
-            matching_items.CancelMeeting()
-            matching_items.Delete()
-
-        
         for item in matching_items:
             recipients = [rec.name for rec in item.Recipients]
-            print(f"Deleting: {item.Subject} at {item.Start} - attendee: {recipients}")
+            if name in recipients:
+                print(f"Found meeting: {item.Subject} {item.Start}")
+                #matching_items.CancelMeeting()
+                #matching_items.Delete()
 
         return matching_items
 
@@ -116,7 +115,8 @@ class MeetingManager:
         self.appointment.Recipients.Add(email)
         self.appointment.BusyStatus = 0
         self.appointment.ReminderMinutesBeforeStart = 24 * 60
-        existing_meeting = self.check_for_existing_shift(operator)
+        #existing_meeting = self.check_for_existing_shift(operator)
+        print(self.appointment)
 
     def send_appointment(self):
         self.appointment.Save()
@@ -177,16 +177,17 @@ def main(args: argparse.Namespace):
     for i in range(len(operator_timeline)):
         if args.date:
             try:
-               date = datetime.strptime(args.date, "%Y-%m%-%d") 
-            except ValueError:
+               date = datetime.strptime(args.date, "%Y-%m-%d") 
+            except ValueError as err:
                 print(f"Date was wrong format, date - {args.date}, format - YYYY-mm-dd")
+                print(err)
                 return
         agent = operator_timeline[i]
         next_operator = get_next_operator(operator_timeline, index=i)
         manager.create_appointment(agent, next_operator)
         if args.send:
             print("Sending meetings")
-            # manager.send_appointment()
+            manager.send_appointment()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
