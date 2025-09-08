@@ -175,6 +175,12 @@ def main(args: argparse.Namespace):
         operator_timeline = create_operator_timeline(AGENTS)
 
     for i in range(len(operator_timeline)):
+        if args.date:
+            try:
+               date = datetime.strptime(args.date, "%Y-%m%-%d") 
+            except ValueError:
+                print(f"Date was wrong format, date - {args.date}, format - YYYY-mm-dd")
+                return
         agent = operator_timeline[i]
         next_operator = get_next_operator(operator_timeline, index=i)
         manager.create_appointment(agent, next_operator)
@@ -185,8 +191,8 @@ def main(args: argparse.Namespace):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", type=str, default="./agents_schedulers.csv", help="Schedule CSV file")
-    parser.add_argument("--agent", type=str, default="", help="Single out one operator for scheduling")
-    parser.add_argument("--date", type=str, default="", help="Specific date to run scheduling on")
+    parser.add_argument("--agent", type=str, default=None, help="Single out one operator for scheduling")
+    parser.add_argument("--date", type=str, default=None, help="Specific date to run scheduling on, format: YYYY-mm-dd")
     parser.add_argument("--send", type=bool, default=False, help="Send out the meeting reminders")
     args = parser.parse_args()
     main(args)
