@@ -156,16 +156,41 @@ def read_schedule(filepath: str, seperator: str = ",") -> pd.DataFrame:
     filtered_df = filtered_df.rename(columns={"Agents/Date": "agent"})
     return filtered_df
 
+def find_agent_with_date(operator_timeline: list[tuple[str, str, datetime]], date: datetime) -> list[tuple[str, str, datetime]]:
+    """
+    Finds the agents with the same operating dates as the date specified in the command line args
+    Will return all tuples with the date
+    """
+    found_times = []
+    for agent in operator_timeline:
+        _, _, agent_date = agent
+        if agent_date == date:
+            found_times.append(agent)
+
+    return found_times
+
+def send_results(manager: MeetingManager, operator_timeline: list[tuple[str, str, datetime]], send_meeting: bool):
+
+    for i in range(len(operator_timeline)):
+        agent = operator_timeline[i]
+        next_operator = get_next_operator(operator_timeline, index=i)
+        manager.create_appointment(agent, next_operator)
+        if send_meeting:
+            print("Sending meetings")
+            manager.send_appointment()
+
 def main(args: argparse.Namespace):
     
     print(f"Using input file: {args.input}")
     filtered_df = read_schedule(args.input)
 
+    print(f"Creating agent list")
     AGENTS = create_agent_list(filtered_df)
 
-    
     manager = MeetingManager()
+    
     if args.agent:
+        print(f"Agent specified: {args.agent}")
         operator = get_operator(args.agent, AGENTS)
         if operator is None:
             print("No agent found")
@@ -174,20 +199,24 @@ def main(args: argparse.Namespace):
     else:
         operator_timeline = create_operator_timeline(AGENTS)
 
-    for i in range(len(operator_timeline)):
-        if args.date:
-            try:
-               date = datetime.strptime(args.date, "%Y-%m-%d") 
-            except ValueError as err:
-                print(f"Date was wrong format, date - {args.date}, format - YYYY-mm-dd")
-                print(err)
-                return
-        agent = operator_timeline[i]
-        next_operator = get_next_operator(operator_timeline, index=i)
-        manager.create_appointment(agent, next_operator)
-        if args.send:
-            print("Sending meetings")
-            manager.send_appointment()
+    if args.date:
+        try:
+            print(f"Converting date {args.date}")
+            date = datetime.strptime(args.date, "%Y-%m-%d") 
+        except ValueError as err:
+            print(f"Date was wrong format, date - {args.date}, format - YYYY-mm-dd")
+            print(err)
+            return
+    else:
+        date = None
+
+    if not date:
+        print(f"Sending meetings for all the agents")
+        send_results(manager, operator_timeline, args.send)
+    else:
+        print(f"Sending meetings for specific date")
+        operator_timeline = find_agent_with_date(operator_timeline, date)
+        send_results(manager, operator_timeline, args.send)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
