@@ -1,3 +1,4 @@
+import argparse
 import pandas as pd
 import win32com.client
 from datetime import datetime, timedelta
@@ -116,8 +117,10 @@ class MeetingManager:
         self.appointment.BusyStatus = 0
         self.appointment.ReminderMinutesBeforeStart = 24 * 60
         existing_meeting = self.check_for_existing_shift(operator)
-#        self.appointment.Save()
-#        self.appointment.Send()
+
+    def send_appointment(self):
+        self.appointment.Save()
+        self.appointment.Send()
 
 def get_operator(name: str, agents: list) -> Operator | None:
     for agent in agents:
@@ -143,35 +146,49 @@ def create_operator_timeline(agents: list[Operator]) -> list[tuple[str, str, dat
     operator_timeline = sorted(operator_timeline, key=lambda x: x[1])
     return operator_timeline
 
-def main():
+def read_schedule(filepath: str, seperator: str = ",") -> pd.DataFrame:
 
-    df = pd.read_csv(filepath_or_buffer="./agents_schedulers.csv", sep=",")
+    df = pd.read_csv(filepath_or_buffer=filepath, sep=seperator)
     print(df)
     date_columns = df.columns[1:]
     df['covered_dates'] = df[date_columns].apply(lambda row: row.dropna().index.tolist(), axis=1)
     filtered_df = df[['Agents/Date', 'covered_dates']]
     filtered_df = filtered_df.rename(columns={"Agents/Date": "agent"})
+    return filtered_df
+
+def main(args: argparse.Namespace):
+    
+    print(f"Using input file: {args.input}")
+    filtered_df = read_schedule(args.input)
 
     AGENTS = create_agent_list(filtered_df)
 
-    operator_timeline = create_operator_timeline(AGENTS)
     
     manager = MeetingManager()
-    mareks = get_operator("Mareks", AGENTS)
-    if mareks is None:
-        print("No agent found")
-        return
-    skaidrite = get_operator("Skaidrite", AGENTS)
+    if args.agent:
+        operator = get_operator(args.agent, AGENTS)
+        if operator is None:
+            print("No agent found")
+            return
+        operator_timeline = create_operator_timeline([operator])
+    else:
+        operator_timeline = create_operator_timeline(AGENTS)
 
-    tuples = (mareks.name, mareks.email, datetime(2025, 7, 24, 10, 0))
-    manager.create_appointment(tuples, tuples)
-   # for i in range(len(operator_timeline)):
-   #     agent = operator_timeline[i]
-   #     next_operator = get_next_operator(operator_timeline, index=i)
-   #     manager.create_appointment(agent, next_operator)
-
+    for i in range(len(operator_timeline)):
+        agent = operator_timeline[i]
+        next_operator = get_next_operator(operator_timeline, index=i)
+        manager.create_appointment(agent, next_operator)
+        if args.send:
+            print("Sending meetings")
+            # manager.send_appointment()
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input", type=str, default="./agents_schedulers.csv", help="Schedule CSV file")
+    parser.add_argument("--agent", type=str, default="", help="Single out one operator for scheduling")
+    parser.add_argument("--date", type=str, default="", help="Specific date to run scheduling on")
+    parser.add_argument("--send", type=bool, default=False, help="Send out the meeting reminders")
+    args = parser.parse_args()
+    main(args)
 
 
