@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 import pytz
 import os
 
+from constants import baltic_char_map
 from dotenv import dotenv_values
 if os.name != 'posix':
     import win32com.client
@@ -13,6 +14,7 @@ if os.name != 'posix':
 
 
 logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 config = dotenv_values(".env")
 if not config:
     config = dotenv_values("env")
@@ -89,19 +91,19 @@ class MeetingManager:
         self.body: str = ""
         self.list_of_dates: list[datetime] = []
 
-    def make_meeting_title(self, service: pd.DataFrame) -> str:
-        
-        service_prefix = "/".join(service["service"].tolist())
-        return f"[{service_prefix}] Operator shift"
+    def make_meeting_title(self, service: pd.DataFrame, operator) -> str:
+        _, _, date = operator
+        services = service.query("@date >= start and @date <= end")
+        service_prefix = "/".join(services["service"].tolist())
+        return f"[{service_prefix}] Upcomming shift"
 
     def check_for_existing_shift(self, operator: tuple[str, str, datetime]):
         name, email, date = operator
         default_calendar = self.namespace.GetDefaultFolder(9).Items
         default_calendar.IncludeRecurrences = False
-        start_date = date
+        start_date = date-timedelta(days=1)
         end_date = date+timedelta(days=1)
-        print(start_date, end_date)
-        restriction = f"[Start] >= '{start_date.strftime('%m/%d/%Y %H:%M')}' AND [Subject] = {self.subject} AND [End] <= '{end_date.strftime('%m/%d/%Y %H:%M')}'"
+        restriction = f"[Start] >= '{start_date.strftime('%m/%d/%Y %H:%M')}' AND [End] <= '{end_date.strftime('%m/%d/%Y %H:%M')}'"
         matching_items = default_calendar.Restrict(restriction)
 
         return matching_items
@@ -122,7 +124,7 @@ class MeetingManager:
             date = specific_date
         self.appointment = self.outlook.CreateItem(1)
         self.appointment.MeetingStatus = 1
-        self.appointment.Subject = self.make_meeting_title(services)
+        self.appointment.Subject = self.make_meeting_title(services, operator)
         self.appointment.Location = self.location
         self.appointment.Body = self.body + f"Next operator -> {next_name}"
         self.appointment.Start = date
@@ -130,12 +132,17 @@ class MeetingManager:
         self.appointment.Recipients.Add(email)
         self.appointment.BusyStatus = 0
         self.appointment.ReminderMinutesBeforeStart = 24 * 60
-        logger.info(f"Appointment created {self.appointment}")
+        logger.debug(f"Appointment created {self.appointment.Subject} - {self.appointment.Start} - {self.appointment.End}")
 
     def send_appointment(self):
         self.appointment.Save()
         self.appointment.Send()
-        logger.info(f"Appointment {self.appointment} sent")
+        logger.info(f"Appointment {self.appointment.Subject} - {self.appointment.Start} - {self.appointment.End} sent")
+
+    def clear_name_of_special_chars(self, text: str) -> str:
+        if not text:
+            return ""
+        return ''.join(baltic_char_map.get(c, c) for c in text)
 
     def cancel_meeting(self, operator: tuple[str, str, datetime]):
         name, _, _ = operator
@@ -144,16 +151,16 @@ class MeetingManager:
             logger.error("Name was not found")            
             sys.exit(1)
         existing_meeting = self.check_for_existing_shift(operator)
-        name = " ".join(name.split(".")).title()
+        shifts = []
         for item in existing_meeting:
-            recipients = [rec.name for rec in item.Recipients]
+            if "Upcomming shift" in item.Subject:
+                shifts.append(item)
+        name = " ".join(name.split(".")).title()
+        for item in shifts:
+            recipients = self.clear_name_of_special_chars(item.RequiredAttendees)
             if name in recipients:
                 logger.info(f"Found meeting: {item.Subject} {item.Start}")
-                item.CancelMeeting()
                 item.Delete()
-                logger.info("Meeting {item.Subject} {item.Start} deleted")
-
-        # TODO: Add check for if the meeting was actually deleted
 
 def get_operator(name: str, agents: list) -> Operator | None:
     for agent in agents:
@@ -235,9 +242,8 @@ def cancel_meeting(manager: MeetingManager,
 
 def main(args: argparse.Namespace):
     
-    logging.basicConfig(level=logging.INFO)
     logger.info(f"Using input file: {args.input}")
-    filtered_df = read_schedule(args.input, seperator=';')
+    filtered_df = read_schedule(args.input, seperator=',')
 
     logger.info(f"Using service timeline: {args.service}")
     service_df = pd.read_csv(args.service, sep=";")
@@ -270,9 +276,8 @@ def main(args: argparse.Namespace):
     else:
         date = None
 
-    services = service_df.query("@date >= start and @date <= end")
     if args.send:
-        send_results(manager, operator_timeline, services, date)
+        send_results(manager, operator_timeline, service_df, date)
 
     if args.cancel:
         cancel_meeting(manager, operator_timeline, date)
