@@ -1,5 +1,6 @@
 # Project defined
 agents_schedulers.csv
+service_timeline.csv
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
