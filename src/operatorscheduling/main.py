@@ -86,6 +86,7 @@ class MeetingManager:
         except:
             self.outlook = None
             self.namespace = None
+        
         self.location: str = "At work/Home"
         self.subject: str = "Upcomming shift"
         self.body: str = ""
@@ -132,7 +133,7 @@ class MeetingManager:
         self.appointment.Recipients.Add(email)
         self.appointment.BusyStatus = 0
         self.appointment.ReminderMinutesBeforeStart = 24 * 60
-        logger.debug(f"Appointment created {self.appointment.Subject} - {self.appointment.Start} - {self.appointment.End}")
+        logger.info(f"Appointment created {self.appointment.Subject} - {self.appointment.Start} - {self.appointment.End} - {name}")
 
     def send_appointment(self):
         self.appointment.Save()
@@ -224,6 +225,7 @@ def send_results(manager: MeetingManager,
         return
 
     operator_date = find_agent_with_date(operator_timeline, date)
+    logger.info(f"{operator_date}")
     manager.create_appointment(operator_date[0], services, None)
     manager.send_appointment()
 
@@ -269,6 +271,7 @@ def main(args: argparse.Namespace):
         try:
             logger.info(f"Converting date {args.date}")
             date = datetime.strptime(args.date, "%Y-%m-%dT%H") 
+            logger.info(f"{date}")
         except ValueError as err:
             logger.error(f"Date was wrong format, date - {args.date}, format - YYYY-mm-ddTHH")
             logger.exception(err)
