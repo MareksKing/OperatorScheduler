@@ -92,9 +92,9 @@ class MeetingManager:
         self.body: str = ""
         self.list_of_dates: list[datetime] = []
 
-    def make_meeting_title(self, service: pd.DataFrame, operator) -> str:
+    def make_meeting_title(self, service: pd.DataFrame, operator: tuple[str, str, datetime]) -> str:
         _, _, date = operator
-        services = service.query("@date >= start and @date <= end")
+        services = service.query("@date.date >= start and @date.date <= end")
         service_prefix = "/".join(services["service"].tolist())
         return f"[{service_prefix}] Upcomming shift"
 
@@ -245,7 +245,7 @@ def cancel_meeting(manager: MeetingManager,
 def main(args: argparse.Namespace):
     
     logger.info(f"Using input file: {args.input}")
-    filtered_df = read_schedule(args.input, seperator=',')
+    filtered_df = read_schedule(args.input, seperator=';')
 
     logger.info(f"Using service timeline: {args.service}")
     service_df = pd.read_csv(args.service, sep=";")

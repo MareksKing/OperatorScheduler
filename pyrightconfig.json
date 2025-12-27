@@ -12,7 +12,7 @@
   ],
 
   "stubPath": "./typings",
-  "pythonPlatform": "Windows",
+  "pythonPlatform": "Linux",
   "pythonVersion": "3.11",
 
   "reportMissingImports": true,
