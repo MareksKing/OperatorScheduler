@@ -14,8 +14,6 @@ class App(ctk.CTk):
         
         self.schedule_file = ctk.StringVar(value="No Schedule File selected")
         self.wg_schedule_file= ctk.StringVar(value="No Working Group File selected")
-        self.selected_operator: str = "ALL"
-        self.selected_date: str = ""
         self.send_meeting: bool = False
         self.selected_row = None
         self.selected_column = None
@@ -44,19 +42,43 @@ class App(ctk.CTk):
         self.run_button.pack()
 
     def run_program(self):
-        subprocess.run([
-                sys.executable,
-                "src/operatorscheduling/main.py",
-                "--input",
-                self.schedule_file.get(),
-                "--service",
-                self.wg_schedule_file.get(),
-                ])
+
+        if self.selected_row:
+            print(f"Running for specified agent: {self.selected_row}")
+            subprocess.run([
+                    sys.executable,
+                    "src/operatorscheduling/main.py",
+                    "--input", self.schedule_file.get(),
+                    "--service", self.wg_schedule_file.get(),
+                    "--agent", self.selected_row
+                    
+                    ])
+        elif self.selected_column:
+            print(f"Running for specified date: {self.selected_column}")
+            subprocess.run([
+                    sys.executable,
+                    "src/operatorscheduling/main.py",
+                    "--input", self.schedule_file.get(),
+                    "--service", self.wg_schedule_file.get(),
+                    "--date", self.selected_column
+                    ])
+        elif not self.selected_row and not self.selected_column:
+            print("No agent or date selected, running for whole time period")
+            subprocess.run([
+                    sys.executable,
+                    "src/operatorscheduling/main.py",
+                    "--input", self.schedule_file.get(),
+                    "--service", self.wg_schedule_file.get(),
+                    ])
+        else:
+            print("No matching case for run found")
 
     def on_selection(self, event=None):
         selected_rows = self.sheet.get_selected_rows()
         selected_columns = self.sheet.get_selected_columns()
 
+        print(selected_rows)
+        print(selected_columns)
         if selected_rows:
             self.selected_row = self.rows[selected_rows.pop()]
             self.selected_column = None
@@ -79,7 +101,8 @@ class App(ctk.CTk):
             file_name = os.path.basename(file_path)
             cl_attr.set(file_name)
 
-        self.load_csv(file_path)
+        if attr == "schedule_file":
+            self.load_csv(file_path)
 
     def load_csv(self, file_path):
 

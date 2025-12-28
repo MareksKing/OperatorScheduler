@@ -296,6 +296,7 @@ def main(args: argparse.Namespace, debug_):
     service_df["start"] = pd.to_datetime(service_df["start"])
     service_df["end"] = pd.to_datetime(service_df["end"])
 
+    breakpoint()
     logger.info(f"Creating agent list")
     AGENTS = create_agent_list(filtered_df)
     logger.info(f"Agent list created: {AGENTS}")
