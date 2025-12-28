@@ -10,7 +10,44 @@ from constants import baltic_char_map
 from dotenv import dotenv_values
 if os.name != 'posix':
     import win32com.client
-    from win32com.client.dynamic import CDispatch
+else:
+    from unittest.mock import MagicMock
+    class win32:
+        def __init__(self):
+            self.client = client
+
+    class client:
+        def __init__(self):
+            self.app = None
+            pass
+
+        @staticmethod
+        def Dispatch(args):
+            return app()
+    
+    class app:
+
+        def __init__(self):
+            pass
+
+        @staticmethod
+        def GetNamespace(args):
+            return namespace_mock()
+
+        @staticmethod
+        def CreateItem(args):
+            return MagicMock()
+
+
+    class namespace_mock:
+        def __init__(self):
+            pass
+
+        @staticmethod
+        def GetDefaultFolder(args):
+            return MagicMock()
+
+    win32com = win32()
 
 
 logger = logging.getLogger(__name__)
@@ -67,7 +104,7 @@ class Operator:
         return f"{self.name} - {self.email}"
 
     def __repr__(self):
-        return f"{self.name} - {self.email}"
+        return f"{self.name} - {self.email}\n"
 
 
 def get_next_operator(operator_timeline: list[tuple[str, str, datetime]], index: int):
@@ -81,7 +118,7 @@ class MeetingManager:
 
     def __init__(self):
         try:
-            self.outlook: CDispatch = win32com.client.Dispatch("Outlook.Application")
+            self.outlook = win32com.client.Dispatch("Outlook.Application")
             self.namespace = self.outlook.GetNamespace("MAPI")
         except:
             self.outlook = None
@@ -94,8 +131,10 @@ class MeetingManager:
 
     def make_meeting_title(self, service: pd.DataFrame, operator: tuple[str, str, datetime]) -> str:
         _, _, date = operator
-        services = service.query("@date.date >= start and @date.date <= end")
+        services = service.query("@date >= start and @date <= end")
         service_prefix = "/".join(services["service"].tolist())
+        if not services["service"].tolist():
+            return "Upcomming shift"
         return f"[{service_prefix}] Upcomming shift"
 
     def check_for_existing_shift(self, operator: tuple[str, str, datetime]):
@@ -221,13 +260,15 @@ def send_results(manager: MeetingManager,
             agent = operator_timeline[i]
             next_operator = get_next_operator(operator_timeline, index=i)
             manager.create_appointment(agent,services, next_operator)
-            manager.send_appointment()
+            if not debug:
+                manager.send_appointment()
         return
 
     operator_date = find_agent_with_date(operator_timeline, date)
     logger.info(f"{operator_date}")
     manager.create_appointment(operator_date[0], services, None)
-    manager.send_appointment()
+    if not debug:
+        manager.send_appointment()
 
 def cancel_meeting(manager: MeetingManager,
                    operator_timeline: list[tuple[str, str, datetime]],
@@ -239,11 +280,14 @@ def cancel_meeting(manager: MeetingManager,
         return
 
     operator_date = find_agent_with_date(operator_timeline, date)
-    manager.cancel_meeting(operator_date[0])
+    if not debug:
+        manager.cancel_meeting(operator_date[0])
 
 
-def main(args: argparse.Namespace):
+def main(args: argparse.Namespace, debug_):
     
+    global debug
+    debug = debug_
     logger.info(f"Using input file: {args.input}")
     filtered_df = read_schedule(args.input, seperator=';')
 
@@ -254,7 +298,7 @@ def main(args: argparse.Namespace):
 
     logger.info(f"Creating agent list")
     AGENTS = create_agent_list(filtered_df)
-
+    logger.info(f"Agent list created: {AGENTS}")
     manager = MeetingManager()
     
     if args.agent:
@@ -265,7 +309,11 @@ def main(args: argparse.Namespace):
             return
         operator_timeline = create_operator_timeline([operator])
     else:
+        logger.info("Creating operator timeline")
         operator_timeline = create_operator_timeline(AGENTS)
+        logger.info("Operator timeline created")
+        if debug:
+            for operator in operator_timeline: logger.info(f"{operator}")
 
     if args.date:
         try:
@@ -277,13 +325,18 @@ def main(args: argparse.Namespace):
             logger.exception(err)
             return
     else:
+        logger.info("No specific date specified")
         date = None
 
-    if args.send:
+    if args.send and debug:
+        logger.info("Sending out the meeting reminders")
         send_results(manager, operator_timeline, service_df, date)
 
-    if args.cancel:
+    if args.cancel and debug:
+        logger.info("Cancelling the meeting reminder")
         cancel_meeting(manager, operator_timeline, date)
+
+    logger.info("Process finished")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -294,6 +347,6 @@ if __name__ == "__main__":
     parser.add_argument("--send", type=bool, default=False, help="Send out the meeting reminders")
     parser.add_argument("--cancel", type=bool, default=False, help="Cancel the meeting")
     args = parser.parse_args()
-    main(args)
+    main(args, debug_=True)
 
 
