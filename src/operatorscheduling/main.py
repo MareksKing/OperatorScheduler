@@ -82,6 +82,8 @@ class Operator:
         converted_list: list[datetime] = []
         FORMAT = config.get("FORMAT", None)
         TIMEZONE = config.get("TIMEZONE", None)
+        if not isinstance(operator_dates, list):
+            operator_dates = [operator_dates]
         removed_time_range_date = [date.split("-")[0] for date in operator_dates]
 
         if FORMAT is None:
@@ -116,7 +118,7 @@ def get_next_operator(operator_timeline: list[tuple[str, str, datetime]], index:
 
 class MeetingManager:
 
-    def __init__(self):
+    def __init__(self, from_email):
         try:
             self.outlook = win32com.client.Dispatch("Outlook.Application")
             self.namespace = self.outlook.GetNamespace("MAPI")
@@ -124,10 +126,25 @@ class MeetingManager:
             self.outlook = None
             self.namespace = None
         
+        self.store = self.get_email(from_email)
         self.location: str = "At work/Home"
         self.subject: str = "Upcomming shift"
         self.body: str = ""
         self.list_of_dates: list[datetime] = []
+
+    def get_email(self, email):
+
+        session = self.outlook.Session
+
+        store = None
+        for st in session.Stores:
+            print(st, email)
+            if st.DisplayName == email:
+                store=st
+                break   
+        store_folder = store.GetDefaultFolder(9)
+        
+        return store_folder
 
     def make_meeting_title(self, service: pd.DataFrame, operator: tuple[str, str, datetime]) -> str:
         _, _, date = operator
@@ -162,7 +179,8 @@ class MeetingManager:
         
         if specific_date is not None:
             date = specific_date
-        self.appointment = self.outlook.CreateItem(1)
+        
+        self.appointment = self.store.Items.Add()
         self.appointment.MeetingStatus = 1
         self.appointment.Subject = self.make_meeting_title(services, operator)
         self.appointment.Location = self.location
@@ -208,12 +226,16 @@ def get_operator(name: str, agents: list) -> Operator | None:
             return agent
     return None
 
-def create_agent_list(df: pd.DataFrame) -> list[Operator]:
+def create_agent_list(df: pd.DataFrame, filter_date: list[str]|None = None) -> list[Operator]:
 
     AGENTS: list[Operator] = []
-    for i, row in df.iterrows():
-        AGENTS.append(Operator(row.agent, row.covered_dates))
-        
+    if filter_date:
+        queried_res = df.explode("covered_dates").query("covered_dates == @filter_date")
+        for i, row in queried_res.iterrows():
+            AGENTS.append(Operator(row.agent, row.covered_dates))
+    else:
+        for i, row in df.iterrows():
+            AGENTS.append(Operator(row.agent, row.covered_dates))
     return AGENTS
 
 def create_operator_timeline(agents: list[Operator]) -> list[tuple[str, str, datetime]]:
@@ -296,11 +318,17 @@ def main(args: argparse.Namespace, debug_):
     service_df["start"] = pd.to_datetime(service_df["start"])
     service_df["end"] = pd.to_datetime(service_df["end"])
 
-    breakpoint()
+
+    if args.date:
+       date = [args.date]
+    else:
+        logger.info("No specific date specified")
+        date = None
+
     logger.info(f"Creating agent list")
-    AGENTS = create_agent_list(filtered_df)
+    AGENTS = create_agent_list(filtered_df, date)
     logger.info(f"Agent list created: {AGENTS}")
-    manager = MeetingManager()
+    manager = MeetingManager(args.email)
     
     if args.agent:
         logger.info(f"Agent specified: {args.agent}")
@@ -309,6 +337,8 @@ def main(args: argparse.Namespace, debug_):
             logger.error("No agent found")
             return
         operator_timeline = create_operator_timeline([operator])
+        if debug:
+            for operator in operator_timeline: logger.info(f"{operator}")
     else:
         logger.info("Creating operator timeline")
         operator_timeline = create_operator_timeline(AGENTS)
@@ -316,24 +346,11 @@ def main(args: argparse.Namespace, debug_):
         if debug:
             for operator in operator_timeline: logger.info(f"{operator}")
 
-    if args.date:
-        try:
-            logger.info(f"Converting date {args.date}")
-            date = datetime.strptime(args.date, "%Y-%m-%dT%H") 
-            logger.info(f"{date}")
-        except ValueError as err:
-            logger.error(f"Date was wrong format, date - {args.date}, format - YYYY-mm-ddTHH")
-            logger.exception(err)
-            return
-    else:
-        logger.info("No specific date specified")
-        date = None
-
-    if args.send and debug:
+    if args.send or debug:
         logger.info("Sending out the meeting reminders")
         send_results(manager, operator_timeline, service_df, date)
 
-    if args.cancel and debug:
+    if args.cancel or debug:
         logger.info("Cancelling the meeting reminder")
         cancel_meeting(manager, operator_timeline, date)
 
@@ -347,7 +364,8 @@ if __name__ == "__main__":
     parser.add_argument("--date", type=str, default=None, help="Specific date to run scheduling on, format: YYYY-mm-ddTHH")
     parser.add_argument("--send", type=bool, default=False, help="Send out the meeting reminders")
     parser.add_argument("--cancel", type=bool, default=False, help="Cancel the meeting")
+    parser.add_argument("--email", type=str, default=False, help="Email from which to send the reminder")
     args = parser.parse_args()
-    main(args, debug_=True)
+    main(args, debug_=False)
 
 
