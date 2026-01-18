@@ -61,9 +61,14 @@ class App(ctk.CTk):
     def run_program(self):
 
         value = self.send_or_cancel.get()
-        send = False
+        send = "False"
+        cancel="False"
+
         if value == "SEND":
             send="True"
+
+        if value == "CANCEL":
+            cancel="True"
             
         if self.selected_row:
             print(f"Running for specified agent: {self.selected_row}")
@@ -74,7 +79,8 @@ class App(ctk.CTk):
                     "--service", self.wg_schedule_file.get(),
                     "--agent", self.selected_row,
                     "--email", self.email_field.get(),
-                    "--send", send
+                    "--send", send,
+                    "--cancel", cancel
                     ])
         elif self.selected_column:
             print(f"Running for specified date: {self.selected_column}")
@@ -85,7 +91,8 @@ class App(ctk.CTk):
                     "--service", self.wg_schedule_file.get(),
                     "--date", self.selected_column,
                     "--email", self.email_field.get(),
-                    "--send", send
+                    "--send", send,
+                    "--cancel", cancel
                     ])
         elif not self.selected_row and not self.selected_column:
             print("No agent or date selected, running for whole time period")
@@ -95,7 +102,8 @@ class App(ctk.CTk):
                     "--input", self.schedule_file.get(),
                     "--service", self.wg_schedule_file.get(),
                     "--email", self.email_field.get(),
-                    "--send", send
+                    "--send", send,
+                    "--cancel", cancel
                     ])
         else:
             print("No matching case for run found")

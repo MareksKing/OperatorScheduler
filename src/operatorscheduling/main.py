@@ -1,6 +1,7 @@
 import argparse
 import sys
 import logging
+from typing import Optional
 import pandas as pd
 from datetime import datetime, timedelta
 import pytz
@@ -156,7 +157,7 @@ class MeetingManager:
 
     def check_for_existing_shift(self, operator: tuple[str, str, datetime]):
         name, email, date = operator
-        default_calendar = self.namespace.GetDefaultFolder(9).Items
+        default_calendar = self.store.Items
         default_calendar.IncludeRecurrences = False
         start_date = date-timedelta(days=1)
         end_date = date+timedelta(days=1)
@@ -219,6 +220,45 @@ class MeetingManager:
             if name in recipients:
                 logger.info(f"Found meeting: {item.Subject} {item.Start}")
                 item.Delete()
+
+    def find_meetings(self, name: str, date: Optional[datetime]):
+        default_calendar = self.store.Items
+        default_calendar.IncludeRecurrences = False
+
+        if date is None:
+            date = datetime.now()
+
+        start_date = date-timedelta(days=1)
+        end_date = date+timedelta(days=1)
+        restriction = f"[Start] >= '{start_date.strftime('%m/%d/%Y %H:%M')}' AND [End] <= '{end_date.strftime('%m/%d/%Y %H:%M')}'"
+        matching_items = default_calendar.Restrict(restriction)
+
+        meetings = []
+        shifts = []
+        for item in matching_items:
+            if "Upcomming shift" in item.Subject:
+                shifts.append(item)
+
+        for item in shifts:
+            recipients = self.clear_name_of_special_chars(item.RequiredAttendees)
+            if name in recipients:
+                meetings.append(item)
+
+        return meetings
+        
+
+
+    def update_meeting(self, operator_timeline: list[tuple[str, str, datetime]]):
+        for operator in operator_timeline:
+            name, email, date = operator
+            name = config.get(f"EMP_{name}")
+            if name is None:
+                logger.error("Name was not found")            
+                sys.exit(1)
+            name = " ".join(name.split(".")).title()
+            meetings = self.find_meetings(name, date)
+            breakpoint()
+            pass
 
 def get_operator(name: str, agents: list) -> Operator | None:
     for agent in agents:
@@ -311,7 +351,7 @@ def main(args: argparse.Namespace, debug_):
     global debug
     debug = debug_
     logger.info(f"Using input file: {args.input}")
-    filtered_df = read_schedule(args.input, seperator=';')
+    filtered_df = read_schedule(args.input, seperator=',')
 
     logger.info(f"Using service timeline: {args.service}")
     service_df = pd.read_csv(args.service, sep=";")
@@ -346,11 +386,14 @@ def main(args: argparse.Namespace, debug_):
         if debug:
             for operator in operator_timeline: logger.info(f"{operator}")
 
-    if args.send or debug:
+    manager.update_meeting(operator_timeline)
+    SEND_BOOL = eval(args.send)
+    CANCEL_BOOL = eval(args.cancel)
+    if SEND_BOOL or debug:
         logger.info("Sending out the meeting reminders")
         send_results(manager, operator_timeline, service_df, date)
 
-    if args.cancel or debug:
+    if CANCEL_BOOL or debug:
         logger.info("Cancelling the meeting reminder")
         cancel_meeting(manager, operator_timeline, date)
 
@@ -362,8 +405,8 @@ if __name__ == "__main__":
     parser.add_argument("--service", type=str, default="./service_timeline.csv", help="Service Main/Backup schedule")
     parser.add_argument("--agent", type=str, default=None, help="Single out one operator for scheduling")
     parser.add_argument("--date", type=str, default=None, help="Specific date to run scheduling on, format: YYYY-mm-ddTHH")
-    parser.add_argument("--send", type=bool, default=False, help="Send out the meeting reminders")
-    parser.add_argument("--cancel", type=bool, default=False, help="Cancel the meeting")
+    parser.add_argument("--send", type=str, default=False, help="Send out the meeting reminders")
+    parser.add_argument("--cancel", type=str, default=False, help="Cancel the meeting")
     parser.add_argument("--email", type=str, default=False, help="Email from which to send the reminder")
     args = parser.parse_args()
     main(args, debug_=False)
